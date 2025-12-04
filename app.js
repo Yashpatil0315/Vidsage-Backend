@@ -12,15 +12,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const userRoute = require('./src/Routes/user');
+const audioProcessingRoute = require('./src/Routes/audioProcessing');
 
 // routes for all the services of user module
 app.use('/user',userRoute);
+app.use('/processAudio',audioProcessingRoute);
 
 mongoose.connect('mongodb://127.0.0.1:27017/Vidsage')
   .then(() => console.log('Connected!'));
 
 
-// MIddle ware working 
+// Middle ware working 
 app.get('/home', authMiddleware, (req, res) => {
   res.cookie("name", "Yash");
   res.send("done")
