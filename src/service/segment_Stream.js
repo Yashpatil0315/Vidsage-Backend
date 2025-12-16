@@ -1,89 +1,71 @@
 // segment_stream.js
-// Usage: node segment_stream.js <VIDEO_URL> <OUT_DIR> [segmentSeconds]
-// Example: node segment_stream.js "https://youtu.be/xxxx" ./out 30
+// Usage: node segment_stream.js <VIDEO_URL> <OUT_DIR> [segmentSeconds] [jobId]
+// Example: node segment_stream.js "https://youtu.be/xxxx" ./out 30 job_12345
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { processJob } = require('./transcribeAndSave');
 
-async function streamAndSegment(url, outDir, segmentSeconds = 30) {
+
+console.log(' SEGMENT_STREAM VERSION: 2025-01-07 12:40 ');
+async function streamAndSegment(url, outDir, segmentSeconds = 90) {
   if (!url) throw new Error('Missing url');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
+  const tmpAudio = path.join(outDir, 'input_audio.webm');
   const outPattern = path.join(outDir, 'segment_%03d.wav');
 
-  // yt-dlp: write best audio to stdout
-  const ytdlpArgs = ['-f', 'bestaudio', '-o', '-', url];
-
-  // ffmpeg: read stdin, convert to mono 16k WAV (pcm_s16le), segment into equal lengths
-  const ffmpegArgs = [
-    '-hide_banner', '-loglevel', 'info',
-    '-i', 'pipe:0',
-    '-vn',
-    '-ac', '1',
-    '-ar', '16000',
-    '-c:a', 'pcm_s16le',
-    '-f', 'segment',
-    '-segment_time', String(segmentSeconds),
-    '-reset_timestamps', '1',
-    '-map', '0:a',
-    outPattern
-  ];
-
-  console.log('Starting yt-dlp -> ffmpeg pipeline');
-  const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'inherit'] });
-  const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['pipe', 'inherit', 'inherit'] });
-
-  // pipe audio
-  ytdlp.stdout.pipe(ffmpeg.stdin);
-
-  // wait for ffmpeg finish
+  console.log('Downloading audio with yt-dlp...');
   await new Promise((resolve, reject) => {
-    let ffErr;
-    ffmpeg.on('error', (e) => ffErr = e);
-    ytdlp.on('error', e => reject(e));
+    const ytdlp = spawn('yt-dlp', [
+      '-f', 'bestaudio',
+      '-o', tmpAudio,
+      url
+    ]);
 
-    ffmpeg.on('close', (code) => {
-      if (ffErr) return reject(ffErr);
-      if (code === 0) return resolve();
-      reject(new Error(`ffmpeg exited with code ${code}`));
-    });
-
-    ytdlp.on('close', (code) => {
-      if (code !== 0) {
-        // yt-dlp may exit non-zero while ffmpeg continues if it already streamed; just warn
-        console.warn(`yt-dlp exited with code ${code}`);
-      }
+    ytdlp.on('error', reject);
+    ytdlp.on('exit', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`yt-dlp exited with ${code}`));
     });
   });
 
-  // collect produced segment file names
+  console.log('Segmenting audio with ffmpeg...');
+  await new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-i', tmpAudio,
+      '-vn',
+      '-ac', '1',
+      '-ar', '16000',
+      '-c:a', 'pcm_s16le',
+      '-f', 'segment',
+      '-segment_time', String(segmentSeconds),
+      '-reset_timestamps', '1',
+      outPattern
+    ]);
+
+    ffmpeg.on('error', reject);
+    ffmpeg.on('exit', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited with ${code}`));
+    });
+  });
+
+  fs.unlinkSync(tmpAudio);
+
   const files = fs.readdirSync(outDir)
     .filter(f => f.endsWith('.wav'))
-    .sort();
+    .sort((a,b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(f => path.join(outDir, f));
 
-  if (files.length === 0) throw new Error('No segments produced');
+  if (!files.length) throw new Error('No segments produced');
 
   console.log(`Produced ${files.length} segments in ${outDir}`);
-  return files.map(f => path.join(outDir, f));
+  return files;
 }
 
-// CLI
-if (require.main === module) {
-  (async () => {
-    try {
-      const [,, url, outDir = './out', seg = '30'] = process.argv;
-      if (!url) {
-        console.error('Usage: node segment_stream.js <VIDEO_URL> <OUT_DIR> [segmentSeconds]');
-        process.exit(1);
-      }
-      const produced = await streamAndSegment(url, outDir, Number(seg));
-      console.log('Segments:', produced);
-    } catch (err) {
-      console.error('Error:', err.message);
-      process.exit(1);
-    }
-  })();
-}
 
+// export for programmatic use
 module.exports = { streamAndSegment };
