@@ -4,6 +4,8 @@ const app = express();
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const {authMiddleware} = require('./src/middlewares/auth');
+require("dotenv").config();
+
 
 const port = 3000;
 
@@ -13,6 +15,13 @@ app.use(cookieParser());
 
 const userRoute = require('./src/Routes/user');
 const audioProcessingRoute = require('./src/Routes/audioProcessing');
+const jobInfoRoute = require('./src/Routes/jobInfo');
+const aiRoutes = require("./src/Routes/ai");
+app.use("/ai", aiRoutes);
+
+
+// routes for job information
+app.use('/',jobInfoRoute);
 
 // routes for all the services of user module
 app.use('/user',userRoute);

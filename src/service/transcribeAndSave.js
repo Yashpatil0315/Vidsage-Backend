@@ -7,6 +7,10 @@ const pLimit = require('p-limit').default; // npm i p-limit
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const jobStore = require("../service/jobStore");
+
+let fullTranscript = "";
+
 
 // runs whisper-cli on a single wav file and returns transcript (or throws)
 function runWhisperOnFile(whisperBin, modelPath, wavPath, { threads = 1, timeoutMs = 5*60*1000, language } = {}) {
@@ -62,87 +66,71 @@ function runWhisperOnFile(whisperBin, modelPath, wavPath, { threads = 1, timeout
  * @returns {Promise<{ transcriptPath: string, perSegment: Array, combined: string }>}
  */
 async function processJob(files, jobId, options = {}) {
-  console.log('STEP 4: processJob entered');
+  console.log("STEP 4: processJob started");
 
   if (!Array.isArray(files) || files.length === 0) {
-    throw new Error('files must be a non-empty array');
+    throw new Error("files must be a non-empty array");
   }
-  
+
   const {
-    whisperBin = process.env.WHISPER_BIN || path.join(process.cwd(), 'whisper', 'whisper-cli.exe'),
-    modelPath  = process.env.MODEL_PATH  || path.join(process.cwd(), 'whisper', 'models', 'ggml-base-q5_1.bin'),
-    outDir = path.dirname(files[0]) || process.cwd(),
-    concurrency = Number(options.concurrency || 1),
-    threads = Number(options.threads || 3),
-    timeoutMs = Number(options.timeoutMs || 5 * 60 * 1000),
-    language = options.language,
-    combine = options.combine ?? true
+    whisperBin = process.env.WHISPER_BIN,
+    modelPath = process.env.MODEL_PATH,
+    outDir = path.dirname(files[0]),
+    concurrency = 1,
+    threads = 3,
+    timeoutMs = 5 * 60 * 1000
   } = options;
 
-  // sanity checks
-  if (!fs.existsSync(whisperBin)) throw new Error('whisper binary not found: ' + whisperBin);
-  if (!fs.existsSync(modelPath)) throw new Error('model not found: ' + modelPath);
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  if (!fs.existsSync(whisperBin)) throw new Error("whisper binary not found");
+  if (!fs.existsSync(modelPath)) throw new Error("model not found");
 
   const limit = pLimit(concurrency);
+  let fullTranscript = "";
 
-  // create tasks
-  const jobs = files.map((file, idx) => limit(async () => {
-    try {
-      const transcript = await runWhisperOnFile(whisperBin, modelPath, file, { threads, timeoutMs, language });
-      return { index: idx, file, transcript, error: null };
-    } catch (err) {
-      return { index: idx, file, transcript: null, error: String(err) };
-    }
-  }));
+  const jobs = files.map((file, index) =>
+    limit(async () => {
+      try {
+        const transcript = await runWhisperOnFile(
+          whisperBin,
+          modelPath,
+          file,
+          { threads, timeoutMs }
+        );
 
-  // run all jobs with concurrency cap
-  const results = await Promise.all(jobs);
-  // sort by original index
-  results.sort((a,b) => a.index - b.index);
+        // Append progressively
+        fullTranscript += `\n${transcript}`;
 
-  // build combined transcript
-  const perSegment = results.map(r => ({ file: r.file, transcript: r.transcript, error: r.error }));
-  const combined = combine
-    ? perSegment.map((p, i) => {
-        const label = `Segment ${i + 1} (${path.basename(p.file)}):`;
-        if (p.transcript) return `${label}\n${p.transcript}`;
-        return `${label}\n[ERROR] ${p.error}`;
-      }).join('\n\n')
-    : '';
+        // Live update
+        jobStore.update(jobId, {
+          status: "processing",
+          progress: `${index + 1}/${files.length}`,
+          transcript: fullTranscript
+        });
 
-  const transcriptFilename = `${jobId}.txt`;
-  const transcriptPath = path.join(outDir, transcriptFilename);
+        return { index, transcript };
+      } catch (err) {
+        return { index, error: err.message };
+      }
+    })
+  );
 
-  // If any segment had an error, write error file and DO NOT delete wavs.
-  const anyError = perSegment.some(p => p.error);
+  await Promise.all(jobs);
 
-  if (anyError) {
-    const errFilename = `${jobId}.err`;
-    const errPath = path.join(outDir, errFilename);
-    const errSummary = {
-      jobId,
-      timestamp: new Date().toISOString(),
-      message: 'One or more segments failed to transcribe. See perSegment for details.',
-      perSegment
-    };
-    fs.writeFileSync(errPath, JSON.stringify(errSummary, null, 2), 'utf8');
-    // still write partial combined transcript (optional) to help debugging:
-    try { fs.writeFileSync(transcriptPath, combined, 'utf8'); } catch(e){/*ignore*/}
-    return { transcriptPath, perSegment, combined, error: true, errorPath: errPath };
-  }
+  // Final write
+  const transcriptPath = path.join(outDir, `${jobId}.txt`);
+  fs.writeFileSync(transcriptPath, fullTranscript, "utf8");
 
-  // all good -> write transcript and delete wavs
-  fs.writeFileSync(transcriptPath, combined, 'utf8');
+  jobStore.update(jobId, {
+    status: "completed",
+    transcript: fullTranscript
+  });
 
-  // delete wav files (best effort)
-  for (const p of files) {
-    try { fs.unlinkSync(p); } catch (e) { /* ignore deletion error */ }
-    // also remove any fallback .txt left by whisper
-    try { fs.unlinkSync(p + '.txt'); } catch (e) { /* ignore */ }
-  }
-
-  return { transcriptPath, perSegment, combined, error: false };
+  return {
+    transcriptPath,
+    combined: fullTranscript,
+    error: false
+  };
 }
+
 
 module.exports = { processJob };
