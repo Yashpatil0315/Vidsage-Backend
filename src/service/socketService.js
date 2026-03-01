@@ -35,7 +35,8 @@ module.exports = function socketService(io) {
       socket.to(jobId).emit("chat-message", {
         user: {
           id: socket.user._id,
-          email: socket.user.email
+          email: socket.user.email,
+          name: socket.user.name || socket.user.email.split('@')[0]
         },
         message,
         time: Date.now()
