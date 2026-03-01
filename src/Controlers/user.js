@@ -21,25 +21,65 @@ async function newUserRegistration(req ,res) {
 
 
 //contriller for user login 
-async function newUserlogin(req ,res) {
-    const { email , password } = req.body;
-    const user = await User.findOne({email});
-    if(!user){
-        return res.status(404).send("User not found");
+async function newUserlogin(req, res) {
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).send("User not found");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    return res.status(400).send("Incorrect password");
+  }
+
+  const token = setUser(user);
+
+  res.cookie("token", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false // set true in production (HTTPS)
+  });
+  console.log(user);
+  return res.status(200).json({
+    message: "Login successful",
+    user: {
+      id: user._id,
+      email: user.email,
+      name: user.name
     }
+    
+  });
+  
+}
 
-    //comparing the stored password withe entered password by user during login
-    const isMatch = await bcrypt.compare(password,user.password);
-    if (!isMatch) return res.status(400).send("incorrect password");
+// controller for fetching logged-in user's profile
+async function getUserProfile(req, res) {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.status(200).json({ user });
+  } catch (error) {
+    return res.status(500).json({ error: "Server error" });
+  }
+}
 
-    //Providing token for authorization and secure access to protected routes
-    const token = setUser(user);
-    res.cookie("token", token);
-
-    return res.status(200).send("login successful");
+// controller for logging out — clears the auth cookie
+function logoutUser(req, res) {
+  res.clearCookie("token", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false,
+  });
+  return res.status(200).json({ message: "Logged out successfully" });
 }
 
 module.exports = {
     newUserRegistration,
-    newUserlogin
+    newUserlogin,
+    getUserProfile,
+    logoutUser
 };

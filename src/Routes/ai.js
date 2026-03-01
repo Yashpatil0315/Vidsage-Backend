@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { askAI } = require("../service/aiService");
+const { askAIService } = require("../service/aiService");
 const jobStore = require("../service/jobStore");
 
 router.post("/ask", async (req, res) => {
@@ -16,7 +16,7 @@ router.post("/ask", async (req, res) => {
   }
 
   try {
-    const answer = await askAI({
+    const answer = await askAIService({
       transcript: job.transcript,
       question
     });

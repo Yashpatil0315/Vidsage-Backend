@@ -4,7 +4,7 @@ const jobStore = require("../service/jobStore");
 
 
 // GET /job/:jobId
-router.get("/job/:jobId", (req, res) => {
+router.get("/:jobId", (req, res) => {
   const job = jobStore.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: "Not found" });
 

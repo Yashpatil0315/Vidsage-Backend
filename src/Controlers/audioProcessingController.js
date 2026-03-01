@@ -17,6 +17,7 @@ exports.processAudio = async (req, res) => {
     // 1️⃣ Create job
     jobStore.create({
       jobId,
+      url,
       status: "processing",
       transcript: ""
     });
@@ -39,6 +40,7 @@ exports.processAudio = async (req, res) => {
     res.json({
       success: true,
       jobId,
+      url,
       message: "Processing started"
     });
 

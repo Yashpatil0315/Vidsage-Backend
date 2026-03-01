@@ -1,14 +1,20 @@
-const {getUser} = require('../service/auth');
+const { getUser } = require("../service/auth");
 
-
-//middleware function to restrict the user from using the services without logging in.
 function authMiddleware(req, res, next) {
+  const token = req.cookies?.token;
+  if (!token) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
 
-    const token = req.cookies.token;
-    const user = getUser(token);
-    if(!user) return res.status(401).send("Access Denied. User NOt logged in");
+  const user = getUser(token);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
 
-    return next();
+  // ATTACH USER
+  req.user = user;
+
+  next();
 }
 
-module.exports = {authMiddleware};
+module.exports = { authMiddleware };

@@ -3,11 +3,28 @@ const express = require('express');
 const app = express();
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const {Server} = require('socket.io');
 const {authMiddleware} = require('./src/middlewares/auth');
+const socketService = require('./src/service/socketService');
 require("dotenv").config();
+const port = 3001;
+const cors = require("cors");
+
+app.use(cors({
+  origin: "http://localhost:3000", 
+  credentials: true
+}));
 
 
-const port = 3000;
+
+const server = require('http').createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -17,36 +34,24 @@ const userRoute = require('./src/Routes/user');
 const audioProcessingRoute = require('./src/Routes/audioProcessing');
 const jobInfoRoute = require('./src/Routes/jobInfo');
 const aiRoutes = require("./src/Routes/ai");
-app.use("/ai", aiRoutes);
+app.use("/ai",authMiddleware, aiRoutes);
 
 
 // routes for job information
-app.use('/',jobInfoRoute);
+app.use('/job',authMiddleware, jobInfoRoute);
 
 // routes for all the services of user module
 app.use('/user',userRoute);
-app.use('/processAudio',audioProcessingRoute);
+
+
+app.use('/processAudio',authMiddleware, audioProcessingRoute);
 
 mongoose.connect('mongodb://127.0.0.1:27017/Vidsage')
   .then(() => console.log('Connected!'));
 
 
-// Middle ware working 
-app.get('/home', authMiddleware, (req, res) => {
-  res.cookie("name", "Yash");
-  res.send("done")
-});
-
-
-
-app.get('/getcookie', (req, res) => {
-  console.log(req.cookies);
-  res.send(cookie);
-});
-
-
-
-app.listen(port, () => {
+socketService(io);
+server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
 

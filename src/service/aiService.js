@@ -1,32 +1,44 @@
-import OpenAI from "openai";
+const OpenAI = require("openai");
 
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1"
 });
 
-export async function askAI({ transcript, question }) {
-  const response = await client.chat.completions.create({
-    model: "meta-llama/llama-3.2-3b-instruct",
-    messages: [
-      {
-        role: "system",
-        content: `
-        You are an intelligent assistant helping a user understand a video.
-        Use the transcript as your primary source.
-        If the transcript does not contain enough information,
-        you may infer logically but do not hallucinate.
-        Do not mention the transcript itself use the video instead.
-        `.trim()
-      },
-      {
-        role: "user",
-        content: `Transcript:\n${transcript}\n\nQuestion:\n${question}`
-      }
-    ],
+async function askAIService({ transcript, question, history }) {
+  const safeHistory = Array.isArray(history) ? history.slice(-8) : [];
+
+  const messages = [
+    {
+      role: "system",
+      content: `
+You are an AI tutor helping students understand a video.
+Use the transcript as reference, but you may use general knowledge.
+If transcript is incomplete, answer cautiously.
+Do not hallucinate facts.Do not explicitely mention word transcript you may use video but not transcript.
+      `.trim()
+    },
+    ...safeHistory,
+    {
+      role: "user",
+      content: `
+Transcript:
+${transcript || "(Transcript still processing)"}
+
+Question:
+${question}
+      `.trim()
+    }
+  ];
+
+  const completion = await client.chat.completions.create({
+    model: process.env.AI_MODEL || "mistralai/mistral-7b-instruct:free",
+    messages,
     temperature: 0.3,
-    max_tokens: 600
+    max_tokens: 500
   });
 
-  return response.choices[0].message.content;
+  return completion.choices[0].message.content;
 }
+
+module.exports = { askAIService };

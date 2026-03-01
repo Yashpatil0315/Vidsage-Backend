@@ -21,13 +21,21 @@ async function streamAndSegment(url, outDir, segmentSeconds = 90) {
     const ytdlp = spawn('yt-dlp', [
       '-f', 'bestaudio',
       '-o', tmpAudio,
+      '--no-overwrites',
       url
     ]);
+
+    let stderrData = '';
+    ytdlp.stdout.on('data', d => console.log('[yt-dlp]', d.toString().trim()));
+    ytdlp.stderr.on('data', d => {
+      stderrData += d.toString();
+      console.error('[yt-dlp stderr]', d.toString().trim());
+    });
 
     ytdlp.on('error', reject);
     ytdlp.on('exit', code => {
       if (code === 0) resolve();
-      else reject(new Error(`yt-dlp exited with ${code}`));
+      else reject(new Error(`yt-dlp exited with ${code}: ${stderrData.trim()}`));
     });
   });
 
