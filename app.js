@@ -10,8 +10,22 @@ require("dotenv").config();
 const port = 3001;
 const cors = require("cors");
 
+// Allow both localhost and the local network IP
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://10.217.228.61:3000"
+];
+
 app.use(cors({
-  origin: "http://localhost:3000", 
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true
 }));
 

@@ -41,7 +41,7 @@ async function newUserlogin(req, res) {
     sameSite: "lax",
     secure: false // set true in production (HTTPS)
   });
-  console.log(user);
+
   return res.status(200).json({
     message: "Login successful",
     user: {
