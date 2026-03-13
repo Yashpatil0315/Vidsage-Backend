@@ -1,4 +1,4 @@
-const aiSessionStore = require("../service/aiSessionStore");
+const aiSessionStore = require("../service/aiSessionsStore");
 const jobStore = require("../service/jobStore");
 const { askAIService } = require("../service/aiService");
 
