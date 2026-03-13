@@ -1,4 +1,4 @@
-const User = require('../models/user');
+const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const { setUser,getUser } = require('../service/auth');
 
@@ -48,8 +48,8 @@ async function newUserlogin(req, res) {
       id: user._id,
       email: user.email,
       name: user.name
-    }
-    
+    },
+    token: token
   });
   
 }

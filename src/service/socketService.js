@@ -3,14 +3,18 @@ const { getUser } = require("../service/auth");
 
 module.exports = function socketService(io) {
 
-  // 🔐 Socket authentication (cookie-based)
+  // 🔐 Socket authentication (cookie-based or auth object)
   io.use((socket, next) => {
     try {
-      const rawCookie = socket.handshake.headers.cookie;
-      if (!rawCookie) return next(new Error("No cookie"));
+      let token = socket.handshake.auth?.token;
+      
+      // Fallback to cookies if no auth token provided
+      if (!token && socket.handshake.headers.cookie) {
+        const parsed = cookie.parse(socket.handshake.headers.cookie);
+        token = parsed.token;
+      }
 
-      const parsed = cookie.parse(rawCookie);
-      const token = parsed.token;
+      if (!token) return next(new Error("No token provided"));
 
       const user = getUser(token);
       if (!user) return next(new Error("Invalid token"));

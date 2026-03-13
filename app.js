@@ -26,7 +26,8 @@ app.use(cors({
     }
     return callback(null, true);
   },
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 
@@ -60,8 +61,10 @@ app.use('/user',userRoute);
 
 app.use('/processAudio',authMiddleware, audioProcessingRoute);
 
-mongoose.connect('mongodb://127.0.0.1:27017/Vidsage')
-  .then(() => console.log('Connected!'));
+const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/Vidsage';
+mongoose.connect(mongoUri)
+  .then(() => console.log('Connected to MongoDB!'))
+  .catch((err) => console.error('MongoDB connection error:', err));
 
 
 socketService(io);

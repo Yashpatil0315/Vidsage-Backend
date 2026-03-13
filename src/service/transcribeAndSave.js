@@ -107,6 +107,15 @@ async function processJob(files, jobId, options = {}) {
           transcript: fullTranscript
         });
 
+        // Cleanup intermediate files
+        try {
+          if (fs.existsSync(file)) fs.unlinkSync(file);
+          const txtFile = file + '.txt';
+          if (fs.existsSync(txtFile)) fs.unlinkSync(txtFile);
+        } catch (cleanupErr) {
+          console.error("Cleanup error for segment", index, cleanupErr.message);
+        }
+
         return { index, transcript };
       } catch (err) {
         return { index, error: err.message };
