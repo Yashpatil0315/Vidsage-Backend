@@ -3,7 +3,7 @@
 //   const { processJob } = require('./transcribe_and_save');
 //   await processJob(filesArray, jobId, { whisperBin, modelPath, outDir, concurrency:1 });
 
-const pLimit = require('p-limit').default; // npm i p-limit
+const pLimit = require('p-limit'); // npm i p-limit@3.1.1
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
