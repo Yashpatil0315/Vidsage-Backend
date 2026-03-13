@@ -7,7 +7,7 @@ const {Server} = require('socket.io');
 const {authMiddleware} = require('./src/middlewares/auth');
 const socketService = require('./src/service/socketService');
 require("dotenv").config();
-const port = 3001;
+const port = process.env.PORT || 3001;
 const cors = require("cors");
 
 // Allow both localhost and the local network IP
